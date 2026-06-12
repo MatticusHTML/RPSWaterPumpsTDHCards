@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPS Pump Curve Tool</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>RPS Pump Curve Tool</h1>
+    <p class="sub">Pick a pump family, enter the Total Dynamic Head, get a customer-ready chart.</p>
+  </div>
+
+  <!-- HOME -->
+  <div id="home">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- TOOL -->
+  <div id="tool" class="hidden">
+    <button class="back" id="back">&larr; All pumps</button>
+    <div class="card">
+      <div class="toolhead">
+        <h2 id="toolTitle"></h2>
+        <span id="pill" class="pill smart">SMART</span>
+      </div>
+      <div class="controls">
+        <div class="fld"><label for="model">Pump model</label><select id="model"></select></div>
+        <div class="fld"><label for="tdh">TDH (feet)</label><input id="tdh" type="number" min="0" step="1"></div>
+        <button class="btn" id="dl">Download chart</button>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="canvas-shell"><canvas id="cv"></canvas></div>
+      <div class="foot"><span class="size-note" id="sizeNote">Download size will show here.</span></div>
+      <p class="hint">Smart models drop a dot on the exact curve and read the GPM. Basic models draw the TDH line only. Downloads auto-compress under 500 KB.</p>
+    </div>
+  </div>
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>
