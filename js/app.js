@@ -255,53 +255,63 @@ function buildExportCanvas(){
   return out;
 }
 
-function blobFromCanvas(canvas, q){
-  return new Promise(r => canvas.toBlob(r, 'image/jpeg', q));
+function blobFromCanvas(canvas, type, q){
+  return new Promise((resolve, reject) => {
+    if(type === 'image/jpeg'){
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not render chart.')), type, q);
+    } else {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not render chart.')), type);
+    }
+  });
 }
 
-function chartFilename(){
-  return modelSel.value + '_TDH' + (parseInt(tdhIn.value, 10) || 0) + '.jpg';
+function chartFilename(ext){
+  return modelSel.value + '_TDH' + (parseInt(tdhIn.value, 10) || 0) + (ext || '.jpg');
 }
 
 function cacheChartBlob(){
-  if(!cur) return;
-  chartFn = chartFilename();
-  blobFromCanvas(buildExportCanvas(), 0.88).then(b => { if(b) chartBlob = b; });
+  if(!cur || !cv.width) return;
+  chartFn = chartFilename('.jpg');
+  blobFromCanvas(buildExportCanvas(), 'image/jpeg', 0.88)
+    .then(b => { chartBlob = b; })
+    .catch(() => {});
 }
 
 modelSel.addEventListener('change', draw);
 tdhIn.addEventListener('input', draw);
 
-async function ensureChartBlob(){
-  draw();
-  chartFn = chartFilename();
-  chartBlob = await blobFromCanvas(buildExportCanvas(), 0.88);
-  return chartBlob;
-}
-
-document.getElementById('copyChart').addEventListener('click', async () => {
+document.getElementById('copyChart').addEventListener('click', () => {
   if(!navigator.clipboard || !window.ClipboardItem){
     sizeNote.textContent = 'Copy is not supported in this browser. Use Download instead.';
     return;
   }
-  try {
-    const b = await ensureChartBlob();
-    if(!b){ sizeNote.textContent = 'Could not copy chart.'; return; }
-    await navigator.clipboard.write([new ClipboardItem({ 'image/jpeg': b })]);
-    sizeNote.textContent = 'Copied! Click the Dialpad message box and press Ctrl+V to paste.';
-  } catch(err){
-    sizeNote.textContent = 'Copy blocked. Use Download, or allow clipboard access for this site.';
+  if(!cur || !cv.width){
+    sizeNote.textContent = 'Open a pump chart first.';
+    return;
   }
+  draw();
+  chartFn = chartFilename('.png');
+  const exp = buildExportCanvas();
+  // PNG + Promise keeps the user click valid while the blob renders (required for clipboard).
+  const pngPromise = blobFromCanvas(exp, 'image/png');
+  navigator.clipboard.write([
+    new ClipboardItem({ 'image/png': pngPromise })
+  ]).then(() => {
+    sizeNote.textContent = 'Copied! Click the Dialpad message box and press Ctrl+V to paste.';
+    pngPromise.then(b => { chartBlob = b; }).catch(() => {});
+  }).catch(() => {
+    sizeNote.textContent = 'Copy blocked. Use Download, or allow clipboard access for this site.';
+  });
 });
 
 // download with auto compression under a byte target
 async function buildExport(maxBytes){
   draw();
   const exp = buildExportCanvas();
-  let q = 0.92, b = await blobFromCanvas(exp, q);
+  let q = 0.92, b = await blobFromCanvas(exp, 'image/jpeg', q);
   while(b && b.size > maxBytes && q > 0.32){
     q = Math.round((q - 0.07) * 100) / 100;
-    b = await blobFromCanvas(exp, q);
+    b = await blobFromCanvas(exp, 'image/jpeg', q);
   }
   return { b, q };
 }
@@ -309,7 +319,7 @@ document.getElementById('dl').addEventListener('click', async () => {
   const { b, q } = await buildExport(500 * 1024);
   if(!b){ sizeNote.textContent = 'Could not generate image in this preview.'; return; }
   chartBlob = b;
-  chartFn = chartFilename();
+  chartFn = chartFilename('.jpg');
   const kb = Math.round(b.size / 1024);
   const fn = chartFn;
   const url = URL.createObjectURL(b), a = document.createElement('a');
