@@ -108,7 +108,7 @@ async function openTool(key){
 document.getElementById('back').addEventListener('click', () => {
   tool.classList.add('hidden');
   home.classList.remove('hidden');
-  sizeNote.textContent = 'Download size will show here.';
+  sizeNote.textContent = 'Copy or download size will show here.';
 });
 
 function curModel(){ return cur.models.find(m => m.id === modelSel.value); }
@@ -209,22 +209,26 @@ function cacheChartBlob(){
 modelSel.addEventListener('change', draw);
 tdhIn.addEventListener('input', draw);
 
-cv.addEventListener('dragstart', e => {
-  if(!chartBlob){
-    e.preventDefault();
-    sizeNote.textContent = 'Chart is still rendering. Try again in a moment.';
+async function ensureChartBlob(){
+  draw();
+  if(!chartBlob) chartBlob = await toBlob(0.88);
+  chartFn = chartFilename();
+  return chartBlob;
+}
+
+document.getElementById('copyChart').addEventListener('click', async () => {
+  if(!navigator.clipboard || !window.ClipboardItem){
+    sizeNote.textContent = 'Copy is not supported in this browser. Use Download instead.';
     return;
   }
-  const file = new File([chartBlob], chartFn, { type: 'image/jpeg' });
-  e.dataTransfer.clearData();
-  if(e.dataTransfer.items){
-    e.dataTransfer.items.add(file);
-  } else {
-    e.dataTransfer.setData('application/octet-stream', chartFn);
+  try {
+    const b = await ensureChartBlob();
+    if(!b){ sizeNote.textContent = 'Could not copy chart.'; return; }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/jpeg': b })]);
+    sizeNote.textContent = 'Copied! Click the Dialpad message box and press Ctrl+V to paste.';
+  } catch(err){
+    sizeNote.textContent = 'Copy blocked. Use Download, or allow clipboard access for this site.';
   }
-  e.dataTransfer.effectAllowed = 'copy';
-  e.dataTransfer.setDragImage(cv, Math.min(cv.width, cv.clientWidth) / 2, Math.min(cv.height, cv.clientHeight) / 2);
-  sizeNote.textContent = 'Dragging ' + chartFn + ' into your chat.';
 });
 
 // download with auto compression under a byte target

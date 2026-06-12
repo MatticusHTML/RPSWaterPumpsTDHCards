@@ -32,12 +32,13 @@
       <div class="controls">
         <div class="fld"><label for="model">Pump model</label><select id="model"></select></div>
         <div class="fld"><label for="tdh">TDH (feet)</label><input id="tdh" type="number" min="0" step="1"></div>
-        <button class="btn" id="dl">Download chart</button>
+        <button class="btn secondary" id="copyChart" type="button">Copy chart</button>
+        <button class="btn" id="dl" type="button">Download chart</button>
       </div>
       <div class="readout" id="readout"></div>
-      <div class="canvas-shell"><canvas id="cv" draggable="true" title="Drag this chart into Dialpad or another chat"></canvas></div>
-      <div class="foot"><span class="size-note" id="sizeNote">Download size will show here.</span></div>
-      <p class="hint">Drag the chart into Dialpad or click Download. Smart models drop a dot on the curve and read the GPM. Downloads auto-compress under 500 KB.</p>
+      <div class="canvas-shell"><canvas id="cv" title="Marked pump curve chart"></canvas></div>
+      <div class="foot"><span class="size-note" id="sizeNote">Copy or download size will show here.</span></div>
+      <p class="hint">Click <b>Copy chart</b>, then paste into Dialpad with Ctrl+V. Download still works if you want a file. Smart models drop a dot on the curve and read the GPM.</p>
     </div>
   </div>
 </div>
