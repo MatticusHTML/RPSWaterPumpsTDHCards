@@ -4685,14 +4685,6 @@
       "image": "images/help-youtube.png",
       "url": "https://www.youtube.com/@RPSWaterPumps",
       "foot": "Opens YouTube in a new tab"
-    },
-    {
-      "title": "Mega Link Click Click",
-      "fam": "Internal help tools",
-      "blurb": "Warranty, quick start, FAQs, pricing, how-to guides, and more.",
-      "image": "images/help-docs.png",
-      "url": "https://docs.google.com/document/d/1s1PSWCiz6BIH9dWWWOlT_m_d1d-zpBVzzdteeNDhviM/edit?tab=t.0",
-      "foot": "Opens Google Doc in a new tab"
     }
   ]
 }
