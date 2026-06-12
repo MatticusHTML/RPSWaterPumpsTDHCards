@@ -2,7 +2,7 @@
 // Data driven: everything comes from data/families.json. No values are hardcoded here.
 // Calibration is stored as fractions of each chart image, so it is resolution independent.
 
-let FAM = {}, ORDER = [];
+let FAM = {}, ORDER = [], HELP_LINKS = [];
 const imgCache = {};
 let curKey = null, cur = null;
 
@@ -49,6 +49,7 @@ async function init(){
   const payload = await res.json();
   FAM = payload.families;
   ORDER = payload.order;
+  HELP_LINKS = payload.helpLinks || [];
   buildHome();
 }
 
@@ -66,6 +67,20 @@ function buildHome(){
       '<div class="blurb">' + f.blurb + '</div>' +
       '<div class="count">' + f.models.length + ' models \u00b7 ' + smart + ' with GPM readout</div></div>';
     card.addEventListener('click', () => openTool(key));
+    grid.appendChild(card);
+  });
+  HELP_LINKS.forEach(link => {
+    const card = document.createElement('a');
+    card.className = 'pcard';
+    card.href = link.url;
+    card.target = '_blank';
+    card.rel = 'noopener noreferrer';
+    card.innerHTML =
+      '<div class="thumb"><img src="' + link.image + '" alt="' + link.title + '"></div>' +
+      '<div class="body"><div class="name">' + link.title + '</div>' +
+      '<div class="fam">' + link.fam + '</div>' +
+      '<div class="blurb">' + link.blurb + '</div>' +
+      '<div class="count">' + link.foot + '</div></div>';
     grid.appendChild(card);
   });
 }
