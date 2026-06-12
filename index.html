@@ -9,8 +9,11 @@
 <body>
 <div class="wrap">
   <div class="top">
-    <h1>RPS Pump Curve Tool</h1>
-    <p class="sub">Pick a pump family, enter the Total Dynamic Head, get a customer-ready chart.</p>
+    <div class="top-main">
+      <h1>RPS Pump Curve Tool</h1>
+      <p class="sub">Pick a pump family, enter the Total Dynamic Head, get a customer-ready chart.</p>
+    </div>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">Dark mode</button>
   </div>
 
   <!-- HOME -->
@@ -32,9 +35,9 @@
         <button class="btn" id="dl">Download chart</button>
       </div>
       <div class="readout" id="readout"></div>
-      <div class="canvas-shell"><canvas id="cv"></canvas></div>
+      <div class="canvas-shell"><canvas id="cv" draggable="true" title="Drag this chart into Dialpad or another chat"></canvas></div>
       <div class="foot"><span class="size-note" id="sizeNote">Download size will show here.</span></div>
-      <p class="hint">Smart models drop a dot on the exact curve and read the GPM. Basic models draw the TDH line only. Downloads auto-compress under 500 KB.</p>
+      <p class="hint">Drag the chart into Dialpad or click Download. Smart models drop a dot on the curve and read the GPM. Downloads auto-compress under 500 KB.</p>
     </div>
   </div>
 </div>

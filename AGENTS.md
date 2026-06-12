@@ -71,7 +71,7 @@ y = (yBf + (yTf - yBf) * tdh / tdhMax) * canvasHeight
 ## Hard rules
 
 - No em dashes anywhere in user-visible copy. Use periods, commas, colons.
-- Only models 1.5 HP and under are listed (head codes 05, 07, 10, 15). Higher HP (20, 30, 50) is intentionally hidden for now. Do not add them back without an explicit ask.
+- ST Series colored charts (05 through 25 RPS) list models through 5 HP (head codes 05, 07, 10, 15, 20, 30, 50). Mid/high-flow ST families (35/40/55, 60/80) go through 5 HP where the chart shows them.
 - Never invent curve data. If a real RPS number is missing, leave `data` as `null` so it falls back to line only.
 - Keep dots landing on the printed line. After any calibration or data edit, verify visually (see tools/calibrate.py).
 - Match existing code style. Touch only what the task needs.

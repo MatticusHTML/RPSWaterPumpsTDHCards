@@ -18,6 +18,29 @@ const readout = document.getElementById('readout');
 const pill = document.getElementById('pill');
 const sizeNote = document.getElementById('sizeNote');
 const toolTitle = document.getElementById('toolTitle');
+const themeToggle = document.getElementById('themeToggle');
+
+const THEME_KEY = 'rps-pump-curve-theme';
+let chartBlob = null, chartFn = 'pump-chart.jpg';
+
+function applyTheme(dark){
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  themeToggle.textContent = dark ? 'Light mode' : 'Dark mode';
+  themeToggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+}
+
+function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY);
+  applyTheme(saved === 'dark');
+}
+
+themeToggle.addEventListener('click', () => {
+  const dark = document.documentElement.getAttribute('data-theme') !== 'dark';
+  applyTheme(dark);
+  localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+});
+
+initTheme();
 
 async function init(){
   const res = await fetch('data/families.json');
@@ -65,8 +88,9 @@ async function openTool(key){
     o.value = m.id; o.textContent = m.label;
     modelSel.appendChild(o);
   });
-  // default to a 1.5HP smart model if present, else first smart, else first
-  const def = cur.models.find(m => m.data && m.id.endsWith('15'))
+  // default to 1 HP if present, else 1.5 HP, else first smart, else first
+  const def = cur.models.find(m => m.data && m.id.endsWith('10'))
+           || cur.models.find(m => m.data && m.id.endsWith('15'))
            || cur.models.find(m => m.data)
            || cur.models[0];
   modelSel.value = def.id;
@@ -167,16 +191,46 @@ function draw(){
     pill.textContent = 'LINE ONLY';
     pill.className = 'pill basic';
     readout.innerHTML = '<b>' + m.label + '</b>: line drawn at <b>' + tdh + ' ft</b>. ' +
-      'Read where it crosses the ' + m.id + ' curve. (No stored curve data for auto-GPM on this model yet.)';
+      'Read where it crosses the ' + m.id + ' curve.';
   }
+  cacheChartBlob();
+}
+
+function chartFilename(){
+  return modelSel.value + '_TDH' + (parseInt(tdhIn.value, 10) || 0) + '.jpg';
+}
+
+function cacheChartBlob(){
+  if(!cur) return;
+  chartFn = chartFilename();
+  toBlob(0.88).then(b => { if(b) chartBlob = b; });
 }
 
 modelSel.addEventListener('change', draw);
 tdhIn.addEventListener('input', draw);
 
+cv.addEventListener('dragstart', e => {
+  if(!chartBlob){
+    e.preventDefault();
+    sizeNote.textContent = 'Chart is still rendering. Try again in a moment.';
+    return;
+  }
+  const file = new File([chartBlob], chartFn, { type: 'image/jpeg' });
+  e.dataTransfer.clearData();
+  if(e.dataTransfer.items){
+    e.dataTransfer.items.add(file);
+  } else {
+    e.dataTransfer.setData('application/octet-stream', chartFn);
+  }
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setDragImage(cv, Math.min(cv.width, cv.clientWidth) / 2, Math.min(cv.height, cv.clientHeight) / 2);
+  sizeNote.textContent = 'Dragging ' + chartFn + ' into your chat.';
+});
+
 // download with auto compression under a byte target
 function toBlob(q){ return new Promise(r => cv.toBlob(r, 'image/jpeg', q)); }
 async function build(maxBytes){
+  draw();
   let q = 0.92, b = await toBlob(q);
   while(b && b.size > maxBytes && q > 0.32){
     q = Math.round((q - 0.07) * 100) / 100;
@@ -185,11 +239,12 @@ async function build(maxBytes){
   return { b, q };
 }
 document.getElementById('dl').addEventListener('click', async () => {
-  draw();
   const { b, q } = await build(500 * 1024);
   if(!b){ sizeNote.textContent = 'Could not generate image in this preview.'; return; }
+  chartBlob = b;
+  chartFn = chartFilename();
   const kb = Math.round(b.size / 1024);
-  const fn = modelSel.value + '_TDH' + (parseInt(tdhIn.value) || 0) + '.jpg';
+  const fn = chartFn;
   const url = URL.createObjectURL(b), a = document.createElement('a');
   a.href = url; a.download = fn; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);

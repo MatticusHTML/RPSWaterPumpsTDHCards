@@ -29,6 +29,46 @@ XLSX_WINS = {
     "300RPS100",
 }
 
+HEAD_LABELS = {
+    "05": "1/2 HP",
+    "07": "3/4 HP",
+    "10": "1 HP",
+    "15": "1.5 HP",
+    "20": "2 HP",
+    "30": "3 HP",
+    "50": "5 HP",
+}
+HEAD_COLORS = {
+    "05": "#2f7fd0",
+    "07": "#cf3b34",
+    "10": "#e0a800",
+    "15": "#2c9b3f",
+    "20": "#e07b00",
+    "30": "#008080",
+    "50": "#6eb5d0",
+}
+
+ST_SHEETS = {
+    "5RPS Sizing+S": "05",
+    "7RPS Sizing": "07",
+    "10RPS Sizing+S": "10",
+    "13RPS Sizing": "13",
+    "18RPS Sizing+S": "18",
+    "25RPS Sizing+S": "25",
+}
+
+ST_FAMILY_HEADS = {
+    "05RPS": ["05", "07", "10", "15", "20"],
+    "07RPS": ["05", "07", "10", "15", "20", "30"],
+    "10RPS": ["05", "07", "10", "15", "20", "30", "50"],
+    "25RPS": ["05", "07", "10", "15", "20", "30", "50"],
+}
+
+ST_13_18 = (
+    [("13", h) for h in ("05", "07", "10", "15", "20", "30", "50")]
+    + [("18", h) for h in ("05", "07", "10", "15", "20", "30", "50")]
+)
+
 
 def norm_id(raw):
     s = str(raw).strip().replace("-S", "").replace(" ", "")
@@ -100,13 +140,24 @@ def parse_big_sheet(rows):
     return store
 
 
-def parse_model_grid(rows, header_pred):
-    """Find a header row matching header_pred, then TDH rows below."""
+def parse_model_grid(rows, header_pred=None, skip_s_suffix=True):
+    """Find a model header row, then TDH rows below."""
     store = {}
     for i, row in enumerate(rows):
-        if not header_pred(row):
+        if header_pred and not header_pred(row):
             continue
-        models = {j: norm_id(c) for j, c in enumerate(row) if c and "RPS" in str(c)}
+        models = {}
+        for j, c in enumerate(row):
+            if not c or "RPS" not in str(c):
+                continue
+            raw = str(c).strip()
+            if skip_s_suffix and raw.replace(" ", "").endswith("-S"):
+                continue
+            mid = norm_id(c)
+            if re.fullmatch(r"\d{2}RPS\d{2}", mid):
+                models[j] = mid
+        if len(models) < 3:
+            continue
         for ri in range(i + 1, len(rows)):
             r = rows[ri]
             if not r or r[0] is None:
@@ -124,7 +175,18 @@ def parse_model_grid(rows, header_pred):
                     except (TypeError, ValueError):
                         continue
                     add_point(store, mid, tdh, gpm)
-        break
+        if store:
+            return store
+    return store
+
+
+def parse_st_xlsx(wb):
+    store = {}
+    for sheet in ST_SHEETS:
+        rows = list(wb[sheet].iter_rows(values_only=True))
+        merge = parse_model_grid(rows)
+        for mid, pts in (merge or {}).items():
+            store[mid] = dedupe_sort(pts)
     return store
 
 
@@ -162,7 +224,7 @@ def parse_xlsx(path):
         )
     )
 
-    # 800RPS200 lives on 650 sheet col 10
+    merge_dict(parse_st_xlsx(wb))
     wb.close()
     out = {mid: dedupe_sort(pts) for mid, pts in store.items()}
     return out
@@ -170,10 +232,37 @@ def parse_xlsx(path):
 
 def merge_sources(md_data, xlsx_data):
     merged = dict(md_data)
-    for mid in XLSX_WINS:
-        if mid in xlsx_data and xlsx_data[mid]:
-            merged[mid] = xlsx_data[mid]
+    for mid, pts in xlsx_data.items():
+        if mid in XLSX_WINS or mid.startswith(
+            ("05RPS", "07RPS", "10RPS", "13RPS", "18RPS", "25RPS")
+        ):
+            if pts:
+                merged[mid] = pts
+        elif mid not in merged and pts:
+            merged[mid] = pts
     return merged
+
+
+def make_model(model_id, curve_data):
+    head = model_id[-2:]
+    color = "#cf8a7d" if model_id == "13RPS10" else HEAD_COLORS.get(head, "#888888")
+    return {
+        "id": model_id,
+        "label": f"{model_id} ({HEAD_LABELS.get(head, head + ' HP')})",
+        "color": color,
+        "data": curve_data.get(model_id),
+    }
+
+
+def expand_st_families(doc, curve_data):
+    fams = doc["families"]
+    for key, heads in ST_FAMILY_HEADS.items():
+        gpm = key[:2]
+        ids = [f"{gpm}RPS{h}" for h in heads]
+        fams[key]["models"] = [make_model(mid, curve_data) for mid in ids]
+
+    ids_1318 = [f"{g}RPS{h}" for g, h in ST_13_18]
+    fams["13_18RPS"]["models"] = [make_model(mid, curve_data) for mid in ids_1318]
 
 
 def apply_to_families(families_doc, curve_data):
@@ -183,10 +272,11 @@ def apply_to_families(families_doc, curve_data):
         fam = families_doc["families"][key]
         for model in fam["models"]:
             mid = model["id"]
-            if mid in curve_data:
+            if mid in curve_data and curve_data[mid]:
                 model["data"] = curve_data[mid]
                 updated += 1
-            elif model["data"] is None:
+            elif not model.get("data"):
+                model["data"] = None
                 missing.append(mid)
     return updated, missing
 
@@ -197,6 +287,7 @@ def main():
     merged = merge_sources(md_data, xlsx_data)
 
     doc = json.loads(FAM_JSON.read_text(encoding="utf-8"))
+    expand_st_families(doc, merged)
     updated, still_null = apply_to_families(doc, merged)
     FAM_JSON.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
 
