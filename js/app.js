@@ -22,6 +22,7 @@ const themeToggle = document.getElementById('themeToggle');
 
 const THEME_KEY = 'rps-pump-curve-theme';
 let chartBlob = null, chartFn = 'pump-chart.jpg';
+let exportCaption = { prefix: '', value: '', suffix: '', valueColor: '#1f9d4d' };
 
 function applyTheme(dark){
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -164,6 +165,12 @@ function draw(){
     if(r.off){
       pill.textContent = 'OFF CURVE';
       pill.className = 'pill basic';
+      exportCaption = {
+        prefix: m.label + ' at ' + tdh + ' ft: ',
+        value: 'off the curve',
+        suffix: '. Past its practical range above ' + r.maxTdh + ' ft TDH. Size up to a higher head code.',
+        valueColor: '#c0392b'
+      };
       readout.innerHTML = '<b>' + m.label + '</b> at <b>' + tdh + ' ft</b>: ' +
         '<span class="gpm warn">off the curve</span>. Past its practical range above ' +
         r.maxTdh + ' ft TDH. Size up to a higher head code.';
@@ -171,6 +178,12 @@ function draw(){
       const gpm = Math.round(r.gpm * 10) / 10, x = X(r.gpm);
       pill.textContent = '~' + gpm + ' GPM';
       pill.className = 'pill smart';
+      exportCaption = {
+        prefix: m.label + ' at ' + tdh + ' ft TDH gives about ',
+        value: gpm + ' GPM',
+        suffix: '.',
+        valueColor: '#1f9d4d'
+      };
       ctx.save();
       ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.fillStyle = m.color; ctx.fill();
@@ -190,10 +203,60 @@ function draw(){
   } else {
     pill.textContent = 'LINE ONLY';
     pill.className = 'pill basic';
+    exportCaption = {
+      prefix: m.label + ': line drawn at ' + tdh + ' ft. Read where it crosses the ' + m.id + ' curve.',
+      value: '',
+      suffix: '',
+      valueColor: '#1f9d4d'
+    };
     readout.innerHTML = '<b>' + m.label + '</b>: line drawn at <b>' + tdh + ' ft</b>. ' +
       'Read where it crosses the ' + m.id + ' curve.';
   }
   cacheChartBlob();
+}
+
+function buildExportCanvas(){
+  const W = cv.width, H = cv.height;
+  const bandH = Math.max(64, Math.round(H * 0.058));
+  const pad = Math.max(14, Math.round(W * 0.016));
+  const out = document.createElement('canvas');
+  out.width = W;
+  out.height = H + bandH;
+  const o = out.getContext('2d');
+
+  o.fillStyle = '#f3f8fc';
+  o.fillRect(0, 0, W, bandH);
+  o.strokeStyle = '#dcebf6';
+  o.lineWidth = Math.max(2, Math.round(W / 640));
+  o.strokeRect(o.lineWidth / 2, o.lineWidth / 2, W - o.lineWidth, bandH - o.lineWidth);
+
+  let fontSize = Math.max(18, Math.round(W * 0.022));
+  o.textBaseline = 'middle';
+  const full = exportCaption.prefix + exportCaption.value + exportCaption.suffix;
+  o.font = '600 ' + fontSize + 'px Arial, sans-serif';
+  while(fontSize > 14 && o.measureText(full).width > W - pad * 2) fontSize -= 1;
+
+  let x = pad, y = bandH / 2;
+  o.font = '600 ' + fontSize + 'px Arial, sans-serif';
+  o.fillStyle = '#16344a';
+  o.fillText(exportCaption.prefix, x, y);
+  x += o.measureText(exportCaption.prefix).width;
+  if(exportCaption.value){
+    o.font = '700 ' + Math.round(fontSize * 1.12) + 'px Arial, sans-serif';
+    o.fillStyle = exportCaption.valueColor;
+    o.fillText(exportCaption.value, x, y);
+    x += o.measureText(exportCaption.value).width;
+    o.font = '600 ' + fontSize + 'px Arial, sans-serif';
+    o.fillStyle = '#16344a';
+  }
+  if(exportCaption.suffix) o.fillText(exportCaption.suffix, x, y);
+
+  o.drawImage(cv, 0, bandH);
+  return out;
+}
+
+function blobFromCanvas(canvas, q){
+  return new Promise(r => canvas.toBlob(r, 'image/jpeg', q));
 }
 
 function chartFilename(){
@@ -203,7 +266,7 @@ function chartFilename(){
 function cacheChartBlob(){
   if(!cur) return;
   chartFn = chartFilename();
-  toBlob(0.88).then(b => { if(b) chartBlob = b; });
+  blobFromCanvas(buildExportCanvas(), 0.88).then(b => { if(b) chartBlob = b; });
 }
 
 modelSel.addEventListener('change', draw);
@@ -211,8 +274,8 @@ tdhIn.addEventListener('input', draw);
 
 async function ensureChartBlob(){
   draw();
-  if(!chartBlob) chartBlob = await toBlob(0.88);
   chartFn = chartFilename();
+  chartBlob = await blobFromCanvas(buildExportCanvas(), 0.88);
   return chartBlob;
 }
 
@@ -232,18 +295,18 @@ document.getElementById('copyChart').addEventListener('click', async () => {
 });
 
 // download with auto compression under a byte target
-function toBlob(q){ return new Promise(r => cv.toBlob(r, 'image/jpeg', q)); }
-async function build(maxBytes){
+async function buildExport(maxBytes){
   draw();
-  let q = 0.92, b = await toBlob(q);
+  const exp = buildExportCanvas();
+  let q = 0.92, b = await blobFromCanvas(exp, q);
   while(b && b.size > maxBytes && q > 0.32){
     q = Math.round((q - 0.07) * 100) / 100;
-    b = await toBlob(q);
+    b = await blobFromCanvas(exp, q);
   }
   return { b, q };
 }
 document.getElementById('dl').addEventListener('click', async () => {
-  const { b, q } = await build(500 * 1024);
+  const { b, q } = await buildExport(500 * 1024);
   if(!b){ sizeNote.textContent = 'Could not generate image in this preview.'; return; }
   chartBlob = b;
   chartFn = chartFilename();
