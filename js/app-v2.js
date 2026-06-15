@@ -103,12 +103,6 @@
     return 200;
   }
 
-  function curveLabel(m){
-    const match = m.label.match(/^(\S+)\s+\((.+)\)$/);
-    if(!match) return m.id;
-    return match[2].replace(/\s+/g, '') + ', ' + match[1];
-  }
-
   // Build chart polyline from [TDH, GPM] table: one point per GPM, stop where data ends.
   function extendCurveForChart(data){
     const byGpm = new Map();
@@ -191,7 +185,6 @@
   }
 
   function buildDatasets(selectedId, tdh, mark){
-    const gpmMax = fam.cal.gpmMax;
     const models = fam.models.filter(m => m.data).slice().sort((a, b) =>
       shutoffHead(a.data) - shutoffHead(b.data)
     );
@@ -199,7 +192,7 @@
     models.forEach(m => {
       const selected = m.id === selectedId;
       datasets.push({
-        label: m.id,
+        label: m.label,
         data: curvePoints(m),
         borderColor: m.color,
         backgroundColor: m.color,
@@ -228,10 +221,6 @@
     return datasets;
   }
 
-  function tdhBand(cal){
-    return cal.tdhMax * 0.065;
-  }
-
   function fixedTdhLabelAnnotation(tdh, cal){
     return {
       type: 'label',
@@ -251,73 +240,6 @@
       yAdjust: 16,
       drawTime: 'afterDraw'
     };
-  }
-
-  function computeLabelAdjustments(entries, tdh, cal, mark){
-    const band = tdhBand(cal);
-    const minGap = cal.tdhMax * 0.048;
-    const markNearLeft = mark && mark.gpm != null && mark.gpm <= cal.gpmMax * 0.22;
-    const adj = entries.map(e => ({ id: e.m.id, head: e.head, yAdj: 0, xAdj: 8 }));
-
-    adj.forEach(a => {
-      const d = Math.abs(a.head - tdh);
-      if(d >= band) return;
-      let push = Math.round(24 + (1 - d / band) * 20);
-      if(markNearLeft && d < band * 1.2){
-        push += 12;
-        a.xAdj = 22;
-      }
-      a.yAdj = a.head >= tdh ? -push : push;
-    });
-
-    const sorted = adj.slice().sort((a, b) => b.head - a.head);
-    for(let i = 1; i < sorted.length; i++){
-      const prev = sorted[i - 1], cur = sorted[i];
-      const headGap = Math.abs(cur.head - prev.head);
-      const effGap = headGap + (Math.abs(cur.yAdj - prev.yAdj) * cal.tdhMax / 520);
-      if(effGap < minGap){
-        const bump = 18;
-        cur.yAdj += cur.head <= prev.head ? bump : -bump;
-      }
-    }
-    return adj;
-  }
-
-  function curveLabelAnnotation(m, cal, yAdjust, xAdjust){
-    const head = shutoffHead(m.data);
-    return {
-      type: 'label',
-      xValue: 0,
-      yValue: head,
-      content: curveLabel(m),
-      color: m.color,
-      backgroundColor: 'rgba(255,255,255,0.96)',
-      borderColor: m.color,
-      borderWidth: 1.5,
-      borderRadius: 4,
-      padding: 6,
-      font: { size: 12, weight: 'bold', family: 'Montserrat, Arial, sans-serif' },
-      textAlign: 'left',
-      position: { x: 'start', y: 'center' },
-      xAdjust: xAdjust != null ? xAdjust : 8,
-      yAdjust: yAdjust || 0,
-      drawTime: 'afterDatasetsDraw'
-    };
-  }
-
-  function curveLabelAnnotations(cal, tdh, mark){
-    const entries = fam.models.filter(m => m.data).map(m => ({
-      m,
-      head: shutoffHead(m.data)
-    })).sort((a, b) => b.head - a.head);
-    const adjustments = computeLabelAdjustments(entries, tdh, cal, mark);
-    const adjMap = Object.fromEntries(adjustments.map(a => [a.id, a]));
-    const out = {};
-    entries.forEach(entry => {
-      const a = adjMap[entry.m.id] || { yAdj: 0, xAdj: 8 };
-      out['lbl_' + entry.m.id] = curveLabelAnnotation(entry.m, cal, a.yAdj, a.xAdj);
-    });
-    return out;
   }
 
   function annotationConfig(tdh, mark){
@@ -360,7 +282,6 @@
     };
 
     annotations.tdhLabel = fixedTdhLabelAnnotation(tdh, cal);
-    Object.assign(annotations, curveLabelAnnotations(cal, tdh, mark));
     return annotations;
   }
 
@@ -383,17 +304,17 @@
         show: { animation: { duration: 0 } },
         hide: { animation: { duration: 0 } }
       },
-      layout: { padding: { top: 12, right: 84, bottom: 10, left: 10 } },
+      layout: { padding: { top: 12, right: 118, bottom: 10, left: 6 } },
       plugins: {
         legend: {
           display: true,
           position: 'right',
           align: 'start',
           labels: {
-            boxWidth: 28,
+            boxWidth: 30,
             boxHeight: 4,
-            padding: 10,
-            font: { size: 13, weight: '600', family: 'Montserrat, Arial, sans-serif' },
+            padding: 12,
+            font: { size: 12, weight: '600', family: 'Montserrat, Arial, sans-serif' },
             color: BRAND.navy,
             filter: item => item.text !== 'Operating point'
           }
@@ -509,27 +430,11 @@
     markDs.backgroundColor = mark.color;
   }
 
-  function syncAnnotations(tdh, mark){
-    const cal = fam.cal;
+  function syncAnnotations(tdh){
     const ann = chart.options.plugins.annotation.annotations;
-    const entries = fam.models.filter(m => m.data).map(m => ({
-      m,
-      head: shutoffHead(m.data)
-    }));
-
     ann.tdhLine.yMin = tdh;
     ann.tdhLine.yMax = tdh;
-
     ann.tdhLabel.content = tdh + ' ft TDH';
-
-    const adjustments = computeLabelAdjustments(entries, tdh, cal, mark);
-    adjustments.forEach(a => {
-      const lbl = ann['lbl_' + a.id];
-      if(lbl){
-        lbl.yAdjust = a.yAdj;
-        lbl.xAdjust = a.xAdj;
-      }
-    });
   }
 
   function chartDraw(){
@@ -574,16 +479,16 @@
     updateReadout();
     const m = curModel();
     const mark = markFromTdh(m, tdh);
-    syncAnnotations(tdh, mark);
+    syncAnnotations(tdh);
     syncMarkDataset(m, tdh);
     chartDraw();
   }
 
   function refreshModel(){
     if(!chart) return;
-    const selectedId = curModel().id;
+    const selectedLabel = curModel().label;
     chart.data.datasets.forEach(ds => {
-      if(ds.label !== 'Operating point') ds.borderWidth = ds.label === selectedId ? 3 : 2;
+      if(ds.label !== 'Operating point') ds.borderWidth = ds.label === selectedLabel ? 3 : 2;
     });
     refreshTdh();
   }
