@@ -4679,6 +4679,14 @@
   },
   "helpLinks": [
     {
+      "title": "TDH Cards 2.0",
+      "fam": "Upgrade preview",
+      "blurb": "Live Chart.js pump curves from the same data. No PDF chart images.",
+      "image": "images/help-v2.png",
+      "page": "v2",
+      "foot": "Opens internal preview"
+    },
+    {
       "title": "RPS YouTube",
       "fam": "Video guides",
       "blurb": "Install tips, troubleshooting, and product walkthroughs.",

@@ -41,7 +41,23 @@
       <p class="hint">Copy or download includes the summary line and chart only (no controls). Paste into Dialpad with Ctrl+V after Copy chart.</p>
     </div>
   </div>
+
+  <!-- TDH CARDS 2.0 PREVIEW -->
+  <div id="v2" class="hidden">
+    <button class="back" id="backV2">&larr; All pumps</button>
+    <div class="card v2-card">
+      <div class="toolhead">
+        <h2>TDH Cards 2.0</h2>
+        <span class="pill smart">PREVIEW</span>
+      </div>
+      <p class="v2-intro">Chart.js preview: same pump data and TDH/GPM readout as v1, but curves are drawn live instead of overlaid on PDF chart images.</p>
+      <div id="v2Root"></div>
+    </div>
+  </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="js/app.js"></script>
+<script src="js/app-v2.js"></script>
 </body>
 </html>

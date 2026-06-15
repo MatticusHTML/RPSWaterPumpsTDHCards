@@ -10,6 +10,7 @@ let curKey = null, cur = null;
 const grid = document.getElementById('grid');
 const home = document.getElementById('home');
 const tool = document.getElementById('tool');
+const v2 = document.getElementById('v2');
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const modelSel = document.getElementById('model');
@@ -70,11 +71,16 @@ function buildHome(){
     grid.appendChild(card);
   });
   HELP_LINKS.forEach(link => {
-    const card = document.createElement('a');
+    const card = link.page ? document.createElement('button') : document.createElement('a');
     card.className = 'pcard';
-    card.href = link.url;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
+    if(link.page){
+      card.type = 'button';
+      card.addEventListener('click', () => openHomePage(link.page));
+    } else {
+      card.href = link.url;
+      card.target = '_blank';
+      card.rel = 'noopener noreferrer';
+    }
     card.innerHTML =
       '<div class="thumb"><img src="' + link.image + '" alt="' + link.title + '"></div>' +
       '<div class="body"><div class="name">' + link.title + '</div>' +
@@ -83,6 +89,23 @@ function buildHome(){
       '<div class="count">' + link.foot + '</div></div>';
     grid.appendChild(card);
   });
+}
+
+function hideAllViews(){
+  home.classList.add('hidden');
+  tool.classList.add('hidden');
+  v2.classList.add('hidden');
+}
+
+function openHomePage(page){
+  if(page === 'v2') openV2();
+}
+
+function openV2(){
+  hideAllViews();
+  v2.classList.remove('hidden');
+  window.scrollTo(0, 0);
+  if(window.initV2) window.initV2({ FAM, ORDER });
 }
 
 function loadImg(key){
@@ -115,16 +138,22 @@ async function openTool(key){
   const im = await loadImg(key);
   cv.width = im.naturalWidth;
   cv.height = im.naturalHeight;
-  home.classList.add('hidden');
+  hideAllViews();
   tool.classList.remove('hidden');
   window.scrollTo(0, 0);
   draw();
 }
 
 document.getElementById('back').addEventListener('click', () => {
-  tool.classList.add('hidden');
+  hideAllViews();
   home.classList.remove('hidden');
   sizeNote.textContent = 'Copy or download size will show here.';
+});
+
+document.getElementById('backV2').addEventListener('click', () => {
+  if(window.destroyV2) window.destroyV2();
+  hideAllViews();
+  home.classList.remove('hidden');
 });
 
 function curModel(){ return cur.models.find(m => m.id === modelSel.value); }
