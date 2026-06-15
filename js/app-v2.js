@@ -109,36 +109,35 @@
     return match[2].replace(/\s+/g, '') + ', ' + match[1];
   }
 
-  // Extrapolate table data to GPM=0 shutoff and chart edge, sorted by GPM ascending.
-  function extendCurveForChart(data, gpmMax){
-    const pts = data.map(([tdh, gpm]) => ({ x: gpm, y: tdh }));
-    pts.sort((a, b) => a.x - b.x);
+  // Build chart polyline from [TDH, GPM] table: one point per GPM, stop where data ends.
+  function extendCurveForChart(data){
+    const byGpm = new Map();
+    data.forEach(([tdh, gpm]) => {
+      if(gpm <= 0 || tdh < 0) return;
+      const key = Math.round(gpm * 100) / 100;
+      const prev = byGpm.get(key);
+      // Same GPM at several TDH values: keep lowest TDH (rightmost point on the curve).
+      if(prev == null || tdh < prev) byGpm.set(key, tdh);
+    });
+    const pts = Array.from(byGpm.entries())
+      .map(([gpm, tdh]) => ({ x: gpm, y: tdh }))
+      .sort((a, b) => a.x - b.x);
 
     if(pts.length >= 2 && pts[0].x > 0){
       const p0 = pts[0], p1 = pts[1];
       const slope = (p1.y - p0.y) / (p1.x - p0.x);
       pts.unshift({ x: 0, y: Math.max(0, p0.y + slope * (0 - p0.x)) });
     }
-
-    const last = pts.length - 1;
-    if(pts[last].x < gpmMax && last >= 1){
-      const p0 = pts[last - 1], p1 = pts[last];
-      const slope = (p1.y - p0.y) / (p1.x - p0.x);
-      if(slope < 0){
-        let yEnd = p1.y + slope * (gpmMax - p1.x);
-        if(yEnd >= 0) pts.push({ x: gpmMax, y: yEnd });
-      }
-    }
     return pts;
   }
 
-  function shutoffHead(data, gpmMax){
-    const pts = extendCurveForChart(data, gpmMax);
+  function shutoffHead(data){
+    const pts = extendCurveForChart(data);
     return pts[0].y;
   }
 
   function curvePoints(m){
-    return extendCurveForChart(m.data, fam.cal.gpmMax);
+    return extendCurveForChart(m.data);
   }
 
   function buildShell(){
@@ -194,7 +193,7 @@
   function buildDatasets(selectedId, tdh, mark){
     const gpmMax = fam.cal.gpmMax;
     const models = fam.models.filter(m => m.data).slice().sort((a, b) =>
-      shutoffHead(a.data, gpmMax) - shutoffHead(b.data, gpmMax)
+      shutoffHead(a.data) - shutoffHead(b.data)
     );
     const datasets = [];
     models.forEach(m => {
@@ -207,7 +206,7 @@
         borderWidth: selected ? 3 : 2,
         pointRadius: 0,
         pointHoverRadius: 4,
-        tension: m.data.length >= 8 ? 0.25 : 0,
+        tension: 0,
         fill: false,
         order: selected ? 0 : 1
       });
@@ -229,8 +228,48 @@
     return datasets;
   }
 
-  function curveLabelAnnotation(m, cal, yAdjust){
-    const head = shutoffHead(m.data, cal.gpmMax);
+  function tdhBand(cal){
+    return cal.tdhMax * 0.065;
+  }
+
+  function tdhLabelAdjust(tdh, cal, entries){
+    const band = tdhBand(cal);
+    const conflict = entries.some(e => Math.abs(e.head - tdh) < band);
+    return conflict ? -30 : -18;
+  }
+
+  function computeLabelAdjustments(entries, tdh, cal, mark){
+    const band = tdhBand(cal);
+    const minGap = cal.tdhMax * 0.048;
+    const markNearLeft = mark && mark.gpm != null && mark.gpm <= cal.gpmMax * 0.22;
+    const adj = entries.map(e => ({ id: e.m.id, head: e.head, yAdj: 0, xAdj: 8 }));
+
+    adj.forEach(a => {
+      const d = Math.abs(a.head - tdh);
+      if(d >= band) return;
+      let push = Math.round(24 + (1 - d / band) * 20);
+      if(markNearLeft && d < band * 1.2){
+        push += 12;
+        a.xAdj = 22;
+      }
+      a.yAdj = a.head >= tdh ? -push : push;
+    });
+
+    const sorted = adj.slice().sort((a, b) => b.head - a.head);
+    for(let i = 1; i < sorted.length; i++){
+      const prev = sorted[i - 1], cur = sorted[i];
+      const headGap = Math.abs(cur.head - prev.head);
+      const effGap = headGap + (Math.abs(cur.yAdj - prev.yAdj) * cal.tdhMax / 520);
+      if(effGap < minGap){
+        const bump = 18;
+        cur.yAdj += cur.head <= prev.head ? bump : -bump;
+      }
+    }
+    return adj;
+  }
+
+  function curveLabelAnnotation(m, cal, yAdjust, xAdjust){
+    const head = shutoffHead(m.data);
     return {
       type: 'label',
       xValue: 0,
@@ -245,32 +284,34 @@
       font: { size: 12, weight: 'bold', family: 'Montserrat, Arial, sans-serif' },
       textAlign: 'left',
       position: { x: 'start', y: 'center' },
-      xAdjust: 8,
+      xAdjust: xAdjust != null ? xAdjust : 8,
       yAdjust: yAdjust || 0,
       drawTime: 'afterDatasetsDraw'
     };
   }
 
-  function curveLabelAnnotations(cal){
+  function curveLabelAnnotations(cal, tdh, mark){
     const entries = fam.models.filter(m => m.data).map(m => ({
       m,
-      head: shutoffHead(m.data, cal.gpmMax)
+      head: shutoffHead(m.data)
     })).sort((a, b) => b.head - a.head);
-    const minGap = cal.tdhMax * 0.055;
+    const adjustments = computeLabelAdjustments(entries, tdh, cal, mark);
+    const adjMap = Object.fromEntries(adjustments.map(a => [a.id, a]));
     const out = {};
-    entries.forEach((entry, i) => {
-      let yAdj = 0;
-      if(i > 0 && Math.abs(entry.head - entries[i - 1].head) < minGap){
-        yAdj = (i % 2 === 0) ? -14 : 14;
-      }
-      out['lbl_' + entry.m.id] = curveLabelAnnotation(entry.m, cal, yAdj);
+    entries.forEach(entry => {
+      const a = adjMap[entry.m.id] || { yAdj: 0, xAdj: 8 };
+      out['lbl_' + entry.m.id] = curveLabelAnnotation(entry.m, cal, a.yAdj, a.xAdj);
     });
     return out;
   }
 
-  function annotationConfig(tdh){
+  function annotationConfig(tdh, mark){
     const cal = fam.cal;
     const band = optimalBand(cal);
+    const entries = fam.models.filter(m => m.data).map(m => ({
+      m,
+      head: shutoffHead(m.data)
+    }));
     const annotations = {
       optimalBand: {
         type: 'box',
@@ -303,28 +344,36 @@
         borderColor: 'rgba(8,54,107,.85)',
         borderWidth: 3,
         borderDash: [10, 6],
-        label: {
-          display: true,
-          content: tdh + ' ft TDH',
-          position: 'start',
-          backgroundColor: 'rgba(255,255,255,0.96)',
-          borderColor: 'rgba(8,54,107,.35)',
-          borderWidth: 1,
-          borderRadius: 4,
-          color: BRAND.navy,
-          font: { weight: 'bold', size: 14, family: 'Montserrat, Arial, sans-serif' },
-          padding: 7,
-          yAdjust: -14
-        }
+        drawTime: 'afterDatasetsDraw'
+      },
+      tdhLabel: {
+        type: 'label',
+        xValue: 0,
+        yValue: tdh,
+        content: tdh + ' ft TDH',
+        color: BRAND.navy,
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        borderColor: BRAND.navy,
+        borderWidth: 2,
+        borderRadius: 4,
+        padding: 8,
+        font: { weight: 'bold', size: 14, family: 'Montserrat, Arial, sans-serif' },
+        textAlign: 'left',
+        position: { x: 'start', y: 'center' },
+        xAdjust: 8,
+        yAdjust: tdhLabelAdjust(tdh, cal, entries),
+        drawTime: 'afterDraw'
       }
     };
 
-    Object.assign(annotations, curveLabelAnnotations(cal));
+    Object.assign(annotations, curveLabelAnnotations(cal, tdh, mark));
     return annotations;
   }
 
   function chartOptions(tdh){
     const cal = fam.cal;
+    const m = curModel();
+    const mark = markFromTdh(m, tdh);
     const xStep = gpmTickStep(cal.gpmMax);
     const yStep = tdhTickStep(cal.tdhMax);
     return {
@@ -364,7 +413,7 @@
           align: 'start'
         },
         annotation: {
-          annotations: annotationConfig(tdh)
+          annotations: annotationConfig(tdh, mark)
         },
         tooltip: {
           callbacks: {
@@ -466,11 +515,29 @@
     markDs.backgroundColor = mark.color;
   }
 
-  function syncTdhAnnotation(tdh){
+  function syncAnnotations(tdh, mark){
+    const cal = fam.cal;
     const ann = chart.options.plugins.annotation.annotations;
+    const entries = fam.models.filter(m => m.data).map(m => ({
+      m,
+      head: shutoffHead(m.data)
+    }));
+
     ann.tdhLine.yMin = tdh;
     ann.tdhLine.yMax = tdh;
-    ann.tdhLine.label.content = tdh + ' ft TDH';
+
+    ann.tdhLabel.yValue = tdh;
+    ann.tdhLabel.content = tdh + ' ft TDH';
+    ann.tdhLabel.yAdjust = tdhLabelAdjust(tdh, cal, entries);
+
+    const adjustments = computeLabelAdjustments(entries, tdh, cal, mark);
+    adjustments.forEach(a => {
+      const lbl = ann['lbl_' + a.id];
+      if(lbl){
+        lbl.yAdjust = a.yAdj;
+        lbl.xAdjust = a.xAdj;
+      }
+    });
   }
 
   function chartDraw(){
@@ -513,8 +580,10 @@
     const tdh = getTdh();
     if(tdh == null) return;
     updateReadout();
-    syncTdhAnnotation(tdh);
-    syncMarkDataset(curModel(), tdh);
+    const m = curModel();
+    const mark = markFromTdh(m, tdh);
+    syncAnnotations(tdh, mark);
+    syncMarkDataset(m, tdh);
     chartDraw();
   }
 
