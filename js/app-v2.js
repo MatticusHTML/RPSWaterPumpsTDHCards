@@ -103,10 +103,18 @@
     return 200;
   }
 
-  // Head code from model id (05, 07, 10, 15, 20, 30, 50) maps to HP tier on the chart.
+  // Head code after "RPS" in the model id (05, 07, 10 … 250) maps to HP tier on the chart.
   function headCode(modelId){
-    const n = parseInt(modelId.slice(-2), 10);
-    return isNaN(n) ? 0 : n;
+    const m = String(modelId).match(/RPS(\d+)$/i);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function compareByHeadCodeDesc(a, b){
+    return headCode(b.id || b) - headCode(a.id || a);
+  }
+
+  function compareByHeadCodeAsc(a, b){
+    return headCode(a.id || a) - headCode(b.id || b);
   }
 
   // Build chart polyline from [TDH, GPM] table: one point per GPM, stop where data ends.
@@ -170,7 +178,7 @@
   function fillModels(){
     const sel = document.getElementById('v2Model');
     sel.innerHTML = '';
-    fam.models.forEach(m => {
+    fam.models.slice().sort(compareByHeadCodeDesc).forEach(m => {
       const o = document.createElement('option');
       o.value = m.id;
       o.textContent = m.label;
@@ -192,12 +200,15 @@
 
   function buildDatasets(selectedId, tdh, mark){
     const models = fam.models.filter(m => m.data).slice()
-      .sort((a, b) => headCode(a.id) - headCode(b.id));
+      .sort(compareByHeadCodeAsc);
     const datasets = [];
     models.forEach(m => {
       const selected = m.id === selectedId;
+      const rank = headCode(m.id);
       datasets.push({
         label: m.label,
+        modelId: m.id,
+        headRank: rank,
         data: curvePoints(m),
         borderColor: m.color,
         backgroundColor: m.color,
@@ -206,7 +217,7 @@
         pointHoverRadius: 4,
         tension: 0,
         fill: false,
-        order: selected ? 0 : 1
+        order: selected ? 1000 + rank : rank
       });
     });
     if(mark && mark.gpm != null){
@@ -315,14 +326,18 @@
           display: true,
           position: 'right',
           align: 'start',
-          reverse: true,
           labels: {
             boxWidth: 30,
             boxHeight: 4,
             padding: 12,
             font: { size: 12, weight: '600', family: 'Montserrat, Arial, sans-serif' },
             color: BRAND.navy,
-            filter: item => item.text !== 'Operating point'
+            filter: item => item.text !== 'Operating point',
+            sort(a, b, data){
+              const rankA = data.datasets[a.datasetIndex].headRank ?? 0;
+              const rankB = data.datasets[b.datasetIndex].headRank ?? 0;
+              return rankB - rankA;
+            }
           }
         },
         title: {
@@ -492,9 +507,12 @@
 
   function refreshModel(){
     if(!chart) return;
-    const selectedLabel = curModel().label;
+    const selectedId = document.getElementById('v2Model').value;
     chart.data.datasets.forEach(ds => {
-      if(ds.label !== 'Operating point') ds.borderWidth = ds.label === selectedLabel ? 3 : 2;
+      if(ds.label === 'Operating point') return;
+      const selected = ds.modelId === selectedId;
+      ds.borderWidth = selected ? 3 : 2;
+      ds.order = selected ? 1000 + (ds.headRank ?? 0) : (ds.headRank ?? 0);
     });
     refreshTdh();
   }
