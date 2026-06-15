@@ -103,6 +103,12 @@
     return 200;
   }
 
+  // Head code from model id (05, 07, 10, 15, 20, 30, 50) maps to HP tier on the chart.
+  function headCode(modelId){
+    const n = parseInt(modelId.slice(-2), 10);
+    return isNaN(n) ? 0 : n;
+  }
+
   // Build chart polyline from [TDH, GPM] table: one point per GPM, stop where data ends.
   function extendCurveForChart(data){
     const byGpm = new Map();
@@ -185,9 +191,8 @@
   }
 
   function buildDatasets(selectedId, tdh, mark){
-    const models = fam.models.filter(m => m.data).slice().sort((a, b) =>
-      shutoffHead(a.data) - shutoffHead(b.data)
-    );
+    const models = fam.models.filter(m => m.data).slice()
+      .sort((a, b) => headCode(a.id) - headCode(b.id));
     const datasets = [];
     models.forEach(m => {
       const selected = m.id === selectedId;
@@ -310,6 +315,7 @@
           display: true,
           position: 'right',
           align: 'start',
+          reverse: true,
           labels: {
             boxWidth: 30,
             boxHeight: 4,
