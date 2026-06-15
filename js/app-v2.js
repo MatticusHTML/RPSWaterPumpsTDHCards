@@ -45,8 +45,76 @@
     return tdh;
   }
 
+  function plotAspect(cal){
+    const w = cal.xRf - cal.xLf;
+    const h = cal.yBf - cal.yTf;
+    return w / h;
+  }
+
+  function chartTitle(){
+    const gpmTag = fam.fam.match(/[\d.]+\s*GPM/i);
+    const suffix = gpmTag ? gpmTag[0] : fam.fam;
+    return fam.title + ' Pump Curves, ' + suffix;
+  }
+
+  function optimalBand(cal){
+    const max = cal.gpmMax;
+    return {
+      xMin: Math.max(0.5, max * 0.08 + 0.5),
+      xMax: max - Math.max(1, max * 0.05)
+    };
+  }
+
+  function gpmTickStep(max){
+    if(max <= 20) return 1;
+    if(max <= 125) return 5;
+    if(max <= 400) return 20;
+    if(max <= 700) return 50;
+    return 100;
+  }
+
+  function tdhTickStep(max){
+    if(max <= 200) return 50;
+    if(max <= 600) return 100;
+    return 200;
+  }
+
+  function curveLabel(m){
+    const match = m.label.match(/^(\S+)\s+\((.+)\)$/);
+    if(!match) return m.id;
+    return match[2].replace(/\s+/g, '') + ', ' + match[1];
+  }
+
+  // Extrapolate table data to GPM=0 shutoff and chart edge, sorted by GPM ascending.
+  function extendCurveForChart(data, gpmMax){
+    const pts = data.map(([tdh, gpm]) => ({ x: gpm, y: tdh }));
+    pts.sort((a, b) => a.x - b.x);
+
+    if(pts.length >= 2 && pts[0].x > 0){
+      const p0 = pts[0], p1 = pts[1];
+      const slope = (p1.y - p0.y) / (p1.x - p0.x);
+      pts.unshift({ x: 0, y: Math.max(0, p0.y + slope * (0 - p0.x)) });
+    }
+
+    const last = pts.length - 1;
+    if(pts[last].x < gpmMax && last >= 1){
+      const p0 = pts[last - 1], p1 = pts[last];
+      const slope = (p1.y - p0.y) / (p1.x - p0.x);
+      if(slope < 0){
+        let yEnd = p1.y + slope * (gpmMax - p1.x);
+        if(yEnd >= 0) pts.push({ x: gpmMax, y: yEnd });
+      }
+    }
+    return pts;
+  }
+
+  function shutoffHead(data, gpmMax){
+    const pts = extendCurveForChart(data, gpmMax);
+    return pts[0].y;
+  }
+
   function curvePoints(m){
-    return m.data.map(([tdh, gpm]) => ({ x: gpm, y: tdh }));
+    return extendCurveForChart(m.data, fam.cal.gpmMax);
   }
 
   function buildShell(){
@@ -100,19 +168,22 @@
   }
 
   function buildDatasets(selectedId, tdh, mark){
+    const gpmMax = fam.cal.gpmMax;
+    const models = fam.models.filter(m => m.data).slice().sort((a, b) =>
+      shutoffHead(a.data, gpmMax) - shutoffHead(b.data, gpmMax)
+    );
     const datasets = [];
-    fam.models.forEach(m => {
-      if(!m.data) return;
+    models.forEach(m => {
       const selected = m.id === selectedId;
       datasets.push({
-        label: m.label,
+        label: m.id,
         data: curvePoints(m),
-        borderColor: selected ? m.color : m.color + '88',
+        borderColor: m.color,
         backgroundColor: m.color,
-        borderWidth: selected ? 3 : 1.5,
+        borderWidth: selected ? 3 : 2,
         pointRadius: 0,
         pointHoverRadius: 4,
-        tension: 0,
+        tension: m.data.length >= 8 ? 0.25 : 0,
         fill: false,
         order: selected ? 0 : 1
       });
@@ -135,7 +206,30 @@
   }
 
   function annotationConfig(tdh){
-    return {
+    const cal = fam.cal;
+    const band = optimalBand(cal);
+    const annotations = {
+      optimalBand: {
+        type: 'box',
+        xMin: band.xMin,
+        xMax: band.xMax,
+        yMin: 0,
+        yMax: cal.tdhMax,
+        backgroundColor: 'rgba(190, 225, 160, 0.35)',
+        borderWidth: 0,
+        drawTime: 'beforeDatasetsDraw'
+      },
+      optimalLabel: {
+        type: 'label',
+        xValue: band.xMax - 0.2,
+        yValue: cal.tdhMax * 0.04,
+        content: 'OPTIMAL RANGE FOR ' + fam.title + ' SERIES',
+        color: '#1a2430',
+        font: { size: 10, weight: 'bold' },
+        textAlign: 'right',
+        position: { x: 'end', y: 'end' },
+        drawTime: 'beforeDatasetsDraw'
+      },
       tdhLine: {
         type: 'line',
         yMin: tdh,
@@ -149,48 +243,74 @@
           position: 'start',
           backgroundColor: 'rgba(255,255,255,.92)',
           color: '#14283a',
-          font: { weight: 'bold', size: 13 },
-          padding: 6
+          font: { weight: 'bold', size: 12 },
+          padding: 5
         }
       }
     };
+
+    fam.models.forEach(m => {
+      if(!m.data) return;
+      const head = shutoffHead(m.data, cal.gpmMax);
+      annotations['lbl_' + m.id] = {
+        type: 'label',
+        xValue: 0.15,
+        yValue: head,
+        content: curveLabel(m),
+        color: m.color,
+        font: { size: 10, weight: 'bold' },
+        textAlign: 'left',
+        position: { x: 'start', y: 'center' },
+        yAdjust: -2
+      };
+    });
+    return annotations;
   }
 
   function chartOptions(tdh){
     const cal = fam.cal;
+    const xStep = gpmTickStep(cal.gpmMax);
+    const yStep = tdhTickStep(cal.tdhMax);
     return {
       responsive: true,
       maintainAspectRatio: true,
-      aspectRatio: 1275 / 1650,
+      aspectRatio: plotAspect(cal),
       animation: { duration: 180 },
+      layout: { padding: { top: 8, right: 72, bottom: 4, left: 4 } },
       plugins: {
         legend: {
           display: true,
-          position: 'bottom',
+          position: 'right',
+          align: 'start',
           labels: {
-            boxWidth: 28,
-            padding: 10,
+            boxWidth: 22,
+            boxHeight: 3,
+            padding: 8,
             font: { size: 11 },
             filter: item => item.text !== 'Operating point'
           }
         },
         title: {
           display: true,
-          text: fam.title + ' Pump Curves',
-          color: '#16344a',
-          font: { size: 16, weight: 'bold' },
-          padding: { bottom: 12 }
+          text: chartTitle(),
+          color: '#1a2430',
+          font: { size: 18, weight: 'bold', family: 'Georgia, "Times New Roman", serif' },
+          padding: { bottom: 14 },
+          align: 'start'
         },
         annotation: {
           annotations: annotationConfig(tdh)
         },
         tooltip: {
           callbacks: {
+            title(items){
+              return items[0].dataset.label === 'Operating point' ? 'Operating point' : items[0].dataset.label;
+            },
             label(ctx){
               if(ctx.dataset.label === 'Operating point'){
                 return '~' + Math.round(ctx.parsed.x * 10) / 10 + ' GPM at ' + tdh + ' ft TDH';
               }
-              return ctx.dataset.label + ': ' + ctx.parsed.y + ' ft @ ' + ctx.parsed.x + ' GPM';
+              return ctx.parsed.y + ' ft @ ' + ctx.parsed.x + ' GPM';
             }
           }
         }
@@ -202,12 +322,16 @@
           max: cal.gpmMax,
           title: {
             display: true,
-            text: 'Flow Rate (GPM)',
-            color: '#16344a',
+            text: 'Gallons Per Minute (GPM)',
+            color: '#1a2430',
             font: { weight: '600', size: 13 }
           },
-          grid: { color: 'rgba(20,52,74,.12)' },
-          ticks: { color: '#5d6b78' }
+          grid: { color: 'rgba(30,60,80,.14)' },
+          ticks: {
+            color: '#1a2430',
+            stepSize: xStep,
+            maxTicksLimit: Math.ceil(cal.gpmMax / xStep) + 2
+          }
         },
         y: {
           type: 'linear',
@@ -215,12 +339,16 @@
           max: cal.tdhMax,
           title: {
             display: true,
-            text: 'Dynamic Head (Feet)',
-            color: '#16344a',
+            text: 'Total Dynamic Head (Feet)',
+            color: '#1a2430',
             font: { weight: '600', size: 13 }
           },
-          grid: { color: 'rgba(20,52,74,.12)' },
-          ticks: { color: '#5d6b78' }
+          grid: { color: 'rgba(30,60,80,.14)' },
+          ticks: {
+            color: '#1a2430',
+            stepSize: yStep,
+            maxTicksLimit: Math.ceil(cal.tdhMax / yStep) + 2
+          }
         }
       }
     };
@@ -261,10 +389,11 @@
       if(!r.off) mark = { gpm: Math.round(r.gpm * 10) / 10, color: m.color };
     }
     chart.data.datasets = buildDatasets(m.id, tdh, mark);
-    chart.options.plugins.annotation.annotations = annotationConfig(tdh);
-    chart.options.plugins.title.text = fam.title + ' Pump Curves';
-    chart.options.scales.x.max = fam.cal.gpmMax;
-    chart.options.scales.y.max = fam.cal.tdhMax;
+    const opts = chartOptions(tdh);
+    chart.options.aspectRatio = opts.aspectRatio;
+    chart.options.layout = opts.layout;
+    chart.options.plugins = opts.plugins;
+    chart.options.scales = opts.scales;
     chart.update();
   }
 

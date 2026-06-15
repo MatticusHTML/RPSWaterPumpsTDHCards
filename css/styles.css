@@ -85,5 +85,5 @@ canvas{display:block;width:100%;height:auto;}
 .v2-controls{margin-bottom:14px;}
 .v2-readout{margin-bottom:14px;}
 .v2-chart-shell{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;padding:10px 10px 4px;}
-.v2-chart-wrap{max-width:100%;}
+.v2-chart-wrap{max-width:100%;margin:0 auto;}
 .v2-hint{margin-top:10px;}
