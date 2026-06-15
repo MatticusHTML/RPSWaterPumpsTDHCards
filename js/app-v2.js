@@ -232,10 +232,25 @@
     return cal.tdhMax * 0.065;
   }
 
-  function tdhLabelAdjust(tdh, cal, entries){
-    const band = tdhBand(cal);
-    const conflict = entries.some(e => Math.abs(e.head - tdh) < band);
-    return conflict ? -30 : -18;
+  function fixedTdhLabelAnnotation(tdh, cal){
+    return {
+      type: 'label',
+      xValue: cal.gpmMax,
+      yValue: 0,
+      content: tdh + ' ft TDH',
+      color: BRAND.navy,
+      backgroundColor: 'rgba(255,255,255,0.98)',
+      borderColor: BRAND.navy,
+      borderWidth: 2,
+      borderRadius: 4,
+      padding: 8,
+      font: { weight: 'bold', size: 14, family: 'Montserrat, Arial, sans-serif' },
+      textAlign: 'right',
+      position: { x: 'end', y: 'start' },
+      xAdjust: -12,
+      yAdjust: 16,
+      drawTime: 'afterDraw'
+    };
   }
 
   function computeLabelAdjustments(entries, tdh, cal, mark){
@@ -308,10 +323,6 @@
   function annotationConfig(tdh, mark){
     const cal = fam.cal;
     const band = optimalBand(cal);
-    const entries = fam.models.filter(m => m.data).map(m => ({
-      m,
-      head: shutoffHead(m.data)
-    }));
     const annotations = {
       optimalBand: {
         type: 'box',
@@ -345,27 +356,10 @@
         borderWidth: 3,
         borderDash: [10, 6],
         drawTime: 'afterDatasetsDraw'
-      },
-      tdhLabel: {
-        type: 'label',
-        xValue: 0,
-        yValue: tdh,
-        content: tdh + ' ft TDH',
-        color: BRAND.navy,
-        backgroundColor: 'rgba(255,255,255,0.98)',
-        borderColor: BRAND.navy,
-        borderWidth: 2,
-        borderRadius: 4,
-        padding: 8,
-        font: { weight: 'bold', size: 14, family: 'Montserrat, Arial, sans-serif' },
-        textAlign: 'left',
-        position: { x: 'start', y: 'center' },
-        xAdjust: 8,
-        yAdjust: tdhLabelAdjust(tdh, cal, entries),
-        drawTime: 'afterDraw'
       }
     };
 
+    annotations.tdhLabel = fixedTdhLabelAnnotation(tdh, cal);
     Object.assign(annotations, curveLabelAnnotations(cal, tdh, mark));
     return annotations;
   }
@@ -526,9 +520,7 @@
     ann.tdhLine.yMin = tdh;
     ann.tdhLine.yMax = tdh;
 
-    ann.tdhLabel.yValue = tdh;
     ann.tdhLabel.content = tdh + ' ft TDH';
-    ann.tdhLabel.yAdjust = tdhLabelAdjust(tdh, cal, entries);
 
     const adjustments = computeLabelAdjustments(entries, tdh, cal, mark);
     adjustments.forEach(a => {
