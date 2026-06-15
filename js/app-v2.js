@@ -229,6 +229,45 @@
     return datasets;
   }
 
+  function curveLabelAnnotation(m, cal, yAdjust){
+    const head = shutoffHead(m.data, cal.gpmMax);
+    return {
+      type: 'label',
+      xValue: 0,
+      yValue: head,
+      content: curveLabel(m),
+      color: m.color,
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: m.color,
+      borderWidth: 1.5,
+      borderRadius: 4,
+      padding: 6,
+      font: { size: 12, weight: 'bold', family: 'Montserrat, Arial, sans-serif' },
+      textAlign: 'left',
+      position: { x: 'start', y: 'center' },
+      xAdjust: 8,
+      yAdjust: yAdjust || 0,
+      drawTime: 'afterDatasetsDraw'
+    };
+  }
+
+  function curveLabelAnnotations(cal){
+    const entries = fam.models.filter(m => m.data).map(m => ({
+      m,
+      head: shutoffHead(m.data, cal.gpmMax)
+    })).sort((a, b) => b.head - a.head);
+    const minGap = cal.tdhMax * 0.055;
+    const out = {};
+    entries.forEach((entry, i) => {
+      let yAdj = 0;
+      if(i > 0 && Math.abs(entry.head - entries[i - 1].head) < minGap){
+        yAdj = (i % 2 === 0) ? -14 : 14;
+      }
+      out['lbl_' + entry.m.id] = curveLabelAnnotation(entry.m, cal, yAdj);
+    });
+    return out;
+  }
+
   function annotationConfig(tdh){
     const cal = fam.cal;
     const band = optimalBand(cal);
@@ -245,49 +284,42 @@
       },
       optimalLabel: {
         type: 'label',
-        xValue: band.xMax - 0.2,
-        yValue: cal.tdhMax * 0.04,
+        xValue: band.xMax - 0.3,
+        yValue: cal.tdhMax * 0.045,
         content: 'OPTIMAL RANGE FOR ' + fam.title + ' SERIES',
         color: BRAND.navy,
-        font: { size: 10, weight: 'bold' },
+        backgroundColor: 'rgba(255,255,255,0.88)',
+        borderRadius: 3,
+        padding: 5,
+        font: { size: 12, weight: 'bold', family: 'Montserrat, Arial, sans-serif' },
         textAlign: 'right',
         position: { x: 'end', y: 'end' },
-        drawTime: 'beforeDatasetsDraw'
+        drawTime: 'afterDatasetsDraw'
       },
       tdhLine: {
         type: 'line',
         yMin: tdh,
         yMax: tdh,
-        borderColor: 'rgba(20,40,55,.85)',
+        borderColor: 'rgba(8,54,107,.85)',
         borderWidth: 3,
         borderDash: [10, 6],
         label: {
           display: true,
           content: tdh + ' ft TDH',
           position: 'start',
-          backgroundColor: 'rgba(255,255,255,.92)',
+          backgroundColor: 'rgba(255,255,255,0.96)',
+          borderColor: 'rgba(8,54,107,.35)',
+          borderWidth: 1,
+          borderRadius: 4,
           color: BRAND.navy,
-          font: { weight: 'bold', size: 12 },
-          padding: 5
+          font: { weight: 'bold', size: 14, family: 'Montserrat, Arial, sans-serif' },
+          padding: 7,
+          yAdjust: -14
         }
       }
     };
 
-    fam.models.forEach(m => {
-      if(!m.data) return;
-      const head = shutoffHead(m.data, cal.gpmMax);
-      annotations['lbl_' + m.id] = {
-        type: 'label',
-        xValue: 0.15,
-        yValue: head,
-        content: curveLabel(m),
-        color: m.color,
-        font: { size: 10, weight: 'bold' },
-        textAlign: 'left',
-        position: { x: 'start', y: 'center' },
-        yAdjust: -2
-      };
-    });
+    Object.assign(annotations, curveLabelAnnotations(cal));
     return annotations;
   }
 
@@ -308,17 +340,17 @@
         show: { animation: { duration: 0 } },
         hide: { animation: { duration: 0 } }
       },
-      layout: { padding: { top: 8, right: 72, bottom: 4, left: 4 } },
+      layout: { padding: { top: 12, right: 84, bottom: 10, left: 10 } },
       plugins: {
         legend: {
           display: true,
           position: 'right',
           align: 'start',
           labels: {
-            boxWidth: 22,
-            boxHeight: 3,
-            padding: 8,
-            font: { size: 11 },
+            boxWidth: 28,
+            boxHeight: 4,
+            padding: 10,
+            font: { size: 13, weight: '600', family: 'Montserrat, Arial, sans-serif' },
             color: BRAND.navy,
             filter: item => item.text !== 'Operating point'
           }
@@ -327,8 +359,8 @@
           display: true,
           text: chartTitle(),
           color: BRAND.navy,
-          font: { size: 18, weight: '900', family: 'Montserrat, "Arial Black", Arial, sans-serif' },
-          padding: { bottom: 14 },
+          font: { size: 22, weight: '900', family: 'Montserrat, "Arial Black", Arial, sans-serif' },
+          padding: { bottom: 16 },
           align: 'start'
         },
         annotation: {
@@ -357,12 +389,13 @@
             display: true,
             text: 'Gallons Per Minute (GPM)',
             color: BRAND.navy,
-            font: { weight: '700', size: 13, family: 'Montserrat, Arial, sans-serif' }
+            font: { weight: '700', size: 16, family: 'Montserrat, Arial, sans-serif' },
+            padding: { top: 8 }
           },
           grid: { color: 'rgba(8,54,107,.12)' },
           ticks: {
             color: BRAND.navy,
-            font: { family: 'Montserrat, Arial, sans-serif' },
+            font: { size: 13, weight: '600', family: 'Montserrat, Arial, sans-serif' },
             stepSize: xStep,
             maxTicksLimit: Math.ceil(cal.gpmMax / xStep) + 2
           }
@@ -375,12 +408,13 @@
             display: true,
             text: 'Total Dynamic Head (Feet)',
             color: BRAND.navy,
-            font: { weight: '700', size: 13, family: 'Montserrat, Arial, sans-serif' }
+            font: { weight: '700', size: 16, family: 'Montserrat, Arial, sans-serif' },
+            padding: { bottom: 8 }
           },
           grid: { color: 'rgba(8,54,107,.12)' },
           ticks: {
             color: BRAND.navy,
-            font: { family: 'Montserrat, Arial, sans-serif' },
+            font: { size: 13, weight: '600', family: 'Montserrat, Arial, sans-serif' },
             stepSize: yStep,
             maxTicksLimit: Math.ceil(cal.tdhMax / yStep) + 2
           }
