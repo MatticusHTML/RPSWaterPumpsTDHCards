@@ -275,7 +275,14 @@
       responsive: true,
       maintainAspectRatio: true,
       aspectRatio: plotAspect(cal),
-      animation: { duration: 180 },
+      animation: false,
+      animations: { colors: false, x: false, y: false },
+      transitions: {
+        active: { animation: { duration: 0 } },
+        resize: { animation: { duration: 0 } },
+        show: { animation: { duration: 0 } },
+        hide: { animation: { duration: 0 } }
+      },
       layout: { padding: { top: 8, right: 72, bottom: 4, left: 4 } },
       plugins: {
         legend: {
@@ -354,6 +361,59 @@
     };
   }
 
+  function markFromTdh(m, tdh){
+    if(!m || !m.data) return null;
+    const r = interpGPM(m.data, tdh);
+    if(r.off) return null;
+    return { gpm: Math.round(r.gpm * 10) / 10, color: m.color };
+  }
+
+  function applyChartOptions(tdh){
+    const opts = chartOptions(tdh);
+    chart.options.aspectRatio = opts.aspectRatio;
+    chart.options.layout = opts.layout;
+    chart.options.plugins = opts.plugins;
+    chart.options.scales = opts.scales;
+  }
+
+  function syncMarkDataset(m, tdh){
+    let markDs = chart.data.datasets.find(d => d.label === 'Operating point');
+    const mark = markFromTdh(m, tdh);
+    if(!mark){
+      if(markDs) markDs.data = [];
+      return;
+    }
+    if(!markDs){
+      chart.data.datasets.push({
+        label: 'Operating point',
+        data: [{ x: mark.gpm, y: tdh }],
+        borderColor: mark.color,
+        backgroundColor: mark.color,
+        pointRadius: 9,
+        pointHoverRadius: 9,
+        pointBorderColor: '#14283a',
+        pointBorderWidth: 3,
+        showLine: false,
+        order: -1
+      });
+      return;
+    }
+    markDs.data = [{ x: mark.gpm, y: tdh }];
+    markDs.borderColor = mark.color;
+    markDs.backgroundColor = mark.color;
+  }
+
+  function syncTdhAnnotation(tdh){
+    const ann = chart.options.plugins.annotation.annotations;
+    ann.tdhLine.yMin = tdh;
+    ann.tdhLine.yMax = tdh;
+    ann.tdhLine.label.content = tdh + ' ft TDH';
+  }
+
+  function chartDraw(){
+    chart.update('none');
+  }
+
   function createChart(){
     registerChartPlugins();
     if(typeof Chart === 'undefined'){
@@ -366,11 +426,7 @@
     if(tdh == null) return;
     const m = curModel();
     const canvas = document.getElementById('v2Chart');
-    let mark = null;
-    if(m.data){
-      const r = interpGPM(m.data, tdh);
-      if(!r.off) mark = { gpm: Math.round(r.gpm * 10) / 10, color: m.color };
-    }
+    const mark = markFromTdh(m, tdh);
     chart = new Chart(canvas, {
       type: 'line',
       data: { datasets: buildDatasets(m.id, tdh, mark) },
@@ -378,23 +434,33 @@
     });
   }
 
-  function refreshChart(){
-    if(!chart) return;
+  function rebuildChart(){
+    if(!chart) return createChart();
     const tdh = getTdh();
     if(tdh == null) return;
     const m = curModel();
-    let mark = null;
-    if(m.data){
-      const r = interpGPM(m.data, tdh);
-      if(!r.off) mark = { gpm: Math.round(r.gpm * 10) / 10, color: m.color };
-    }
-    chart.data.datasets = buildDatasets(m.id, tdh, mark);
-    const opts = chartOptions(tdh);
-    chart.options.aspectRatio = opts.aspectRatio;
-    chart.options.layout = opts.layout;
-    chart.options.plugins = opts.plugins;
-    chart.options.scales = opts.scales;
-    chart.update();
+    chart.data.datasets = buildDatasets(m.id, tdh, markFromTdh(m, tdh));
+    applyChartOptions(tdh);
+    chartDraw();
+  }
+
+  function refreshTdh(){
+    if(!chart) return;
+    const tdh = getTdh();
+    if(tdh == null) return;
+    updateReadout();
+    syncTdhAnnotation(tdh);
+    syncMarkDataset(curModel(), tdh);
+    chartDraw();
+  }
+
+  function refreshModel(){
+    if(!chart) return;
+    const selectedId = curModel().id;
+    chart.data.datasets.forEach(ds => {
+      if(ds.label !== 'Operating point') ds.borderWidth = ds.label === selectedId ? 3 : 2;
+    });
+    refreshTdh();
   }
 
   function updateReadout(){
@@ -438,12 +504,6 @@
     };
   }
 
-  function render(){
-    updateReadout();
-    if(chart) refreshChart();
-    else createChart();
-  }
-
   function setFamily(key){
     famKey = key;
     fam = FAM[key];
@@ -451,8 +511,8 @@
     const tdhIn = document.getElementById('v2Tdh');
     tdhIn.max = fam.cal.tdhMax;
     tdhIn.value = fam.default;
-    createChart();
     updateReadout();
+    rebuildChart();
   }
 
   function buildExportCanvas(){
@@ -516,8 +576,10 @@
 
   function wireEvents(){
     document.getElementById('v2Family').addEventListener('change', e => setFamily(e.target.value));
-    document.getElementById('v2Model').addEventListener('change', render);
-    document.getElementById('v2Tdh').addEventListener('input', render);
+    document.getElementById('v2Model').addEventListener('change', refreshModel);
+    const tdhIn = document.getElementById('v2Tdh');
+    tdhIn.addEventListener('input', refreshTdh);
+    tdhIn.addEventListener('change', refreshTdh);
 
     document.getElementById('v2Copy').addEventListener('click', () => {
       const note = document.getElementById('v2SizeNote');
@@ -529,7 +591,7 @@
         note.textContent = 'Chart is not ready yet.';
         return;
       }
-      render();
+      refreshTdh();
       const exp = buildExportCanvas();
       if(!exp){
         note.textContent = 'Could not copy chart.';
@@ -551,7 +613,7 @@
         note.textContent = 'Chart is not ready yet.';
         return;
       }
-      render();
+      refreshTdh();
       const exp = buildExportCanvas();
       if(!exp){
         note.textContent = 'Could not generate image.';
