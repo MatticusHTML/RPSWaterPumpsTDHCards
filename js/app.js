@@ -23,7 +23,10 @@ const themeToggle = document.getElementById('themeToggle');
 
 const THEME_KEY = 'rps-pump-curve-theme';
 let chartBlob = null, chartFn = 'pump-chart.jpg';
-let exportCaption = { prefix: '', value: '', suffix: '', valueColor: '#1f9d4d' };
+let exportCaption = { prefix: '', value: '', suffix: '', valueColor: '#1a7a42' };
+const BRAND_NAVY = '#08366B';
+const BRAND_EXPORT_BG = '#f3fafe';
+const BRAND_EXPORT_LINE = '#c5dce8';
 
 function applyTheme(dark){
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -199,7 +202,7 @@ function draw(){
   ctx.font = 'bold 22px Arial'; ctx.textBaseline = 'middle';
   const tag = tdh + ' ft TDH', tw = ctx.measureText(tag).width;
   ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(xL + 6, y - 15, tw + 12, 30);
-  ctx.fillStyle = '#14283a'; ctx.fillText(tag, xL + 12, y);
+  ctx.fillStyle = BRAND_NAVY; ctx.fillText(tag, xL + 12, y);
   ctx.restore();
 
   const m = curModel(), smart = !!m.data;
@@ -226,18 +229,18 @@ function draw(){
         prefix: m.label + ' at ' + tdh + ' ft TDH gives about ',
         value: gpm + ' GPM',
         suffix: '.',
-        valueColor: '#1f9d4d'
+        valueColor: '#1a7a42'
       };
       ctx.save();
       ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.fillStyle = m.color; ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = '#14283a'; ctx.stroke();
+      ctx.lineWidth = 4; ctx.strokeStyle = BRAND_NAVY; ctx.stroke();
       ctx.font = 'bold 26px Arial';
       const lbl = '~' + gpm + ' GPM', lw = ctx.measureText(lbl).width;
       let bx = x + 20, by = y - 44;
       if(bx + lw + 18 > xR) bx = x - lw - 38;
       if(by < c.yTf * H) by = y + 16;
-      ctx.fillStyle = '#14283a'; ctx.fillRect(bx, by, lw + 18, 38);
+      ctx.fillStyle = BRAND_NAVY; ctx.fillRect(bx, by, lw + 18, 38);
       ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
       ctx.fillText(lbl, bx + 9, by + 19);
       ctx.restore();
@@ -251,7 +254,7 @@ function draw(){
       prefix: m.label + ': line drawn at ' + tdh + ' ft. Read where it crosses the ' + m.id + ' curve.',
       value: '',
       suffix: '',
-      valueColor: '#1f9d4d'
+      valueColor: '#1a7a42'
     };
     readout.innerHTML = '<b>' + m.label + '</b>: line drawn at <b>' + tdh + ' ft</b>. ' +
       'Read where it crosses the ' + m.id + ' curve.';
@@ -268,9 +271,9 @@ function buildExportCanvas(){
   out.height = H + bandH;
   const o = out.getContext('2d');
 
-  o.fillStyle = '#f3f8fc';
+  o.fillStyle = BRAND_EXPORT_BG;
   o.fillRect(0, 0, W, bandH);
-  o.strokeStyle = '#dcebf6';
+  o.strokeStyle = BRAND_EXPORT_LINE;
   o.lineWidth = Math.max(2, Math.round(W / 640));
   o.strokeRect(o.lineWidth / 2, o.lineWidth / 2, W - o.lineWidth, bandH - o.lineWidth);
 
@@ -281,17 +284,17 @@ function buildExportCanvas(){
   while(fontSize > 14 && o.measureText(full).width > W - pad * 2) fontSize -= 1;
 
   let x = pad, y = bandH / 2;
-  o.font = '600 ' + fontSize + 'px Arial, sans-serif';
-  o.fillStyle = '#16344a';
+  o.font = '600 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+  o.fillStyle = BRAND_NAVY;
   o.fillText(exportCaption.prefix, x, y);
   x += o.measureText(exportCaption.prefix).width;
   if(exportCaption.value){
-    o.font = '700 ' + Math.round(fontSize * 1.12) + 'px Arial, sans-serif';
+    o.font = '700 ' + Math.round(fontSize * 1.12) + 'px Montserrat, Arial, sans-serif';
     o.fillStyle = exportCaption.valueColor;
     o.fillText(exportCaption.value, x, y);
     x += o.measureText(exportCaption.value).width;
-    o.font = '600 ' + fontSize + 'px Arial, sans-serif';
-    o.fillStyle = '#16344a';
+    o.font = '600 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+    o.fillStyle = BRAND_NAVY;
   }
   if(exportCaption.suffix) o.fillText(exportCaption.suffix, x, y);
 

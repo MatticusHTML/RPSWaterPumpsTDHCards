@@ -6,10 +6,34 @@
   let chart = null;
   let built = false;
   let wired = false;
-  let exportCaption = { prefix: '', value: '', suffix: '', valueColor: '#1f9d4d' };
+  let exportCaption = { prefix: '', value: '', suffix: '', valueColor: '#1a7a42' };
+
+  const BRAND = {
+    navy: '#08366B',
+    sky: '#B2DFF1',
+    gold: '#C59A4A',
+    brown: '#8F7262',
+    good: '#1a7a42',
+    exportBg: '#f3fafe',
+    exportLine: '#c5dce8',
+    headFont: '900 18px Montserrat, "Arial Black", Arial, sans-serif',
+    bodyFont: '600 13px Montserrat, Arial, sans-serif'
+  };
 
   const root = document.getElementById('v2Root');
   let annoRegistered = false;
+
+  const whiteBgPlugin = {
+    id: 'v2WhiteBg',
+    beforeDraw(chart){
+      const { ctx, width, height } = chart;
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  };
 
   function registerChartPlugins(){
     if(annoRegistered || typeof Chart === 'undefined') return;
@@ -196,7 +220,7 @@
         backgroundColor: mark.color,
         pointRadius: 9,
         pointHoverRadius: 9,
-        pointBorderColor: '#14283a',
+        pointBorderColor: BRAND.navy,
         pointBorderWidth: 3,
         showLine: false,
         order: -1
@@ -215,7 +239,7 @@
         xMax: band.xMax,
         yMin: 0,
         yMax: cal.tdhMax,
-        backgroundColor: 'rgba(190, 225, 160, 0.35)',
+        backgroundColor: 'rgba(178, 223, 241, 0.42)',
         borderWidth: 0,
         drawTime: 'beforeDatasetsDraw'
       },
@@ -224,7 +248,7 @@
         xValue: band.xMax - 0.2,
         yValue: cal.tdhMax * 0.04,
         content: 'OPTIMAL RANGE FOR ' + fam.title + ' SERIES',
-        color: '#1a2430',
+        color: BRAND.navy,
         font: { size: 10, weight: 'bold' },
         textAlign: 'right',
         position: { x: 'end', y: 'end' },
@@ -242,7 +266,7 @@
           content: tdh + ' ft TDH',
           position: 'start',
           backgroundColor: 'rgba(255,255,255,.92)',
-          color: '#14283a',
+          color: BRAND.navy,
           font: { weight: 'bold', size: 12 },
           padding: 5
         }
@@ -275,6 +299,7 @@
       responsive: true,
       maintainAspectRatio: true,
       aspectRatio: plotAspect(cal),
+      backgroundColor: '#ffffff',
       animation: false,
       animations: { colors: false, x: false, y: false },
       transitions: {
@@ -294,14 +319,15 @@
             boxHeight: 3,
             padding: 8,
             font: { size: 11 },
+            color: BRAND.navy,
             filter: item => item.text !== 'Operating point'
           }
         },
         title: {
           display: true,
           text: chartTitle(),
-          color: '#1a2430',
-          font: { size: 18, weight: 'bold', family: 'Georgia, "Times New Roman", serif' },
+          color: BRAND.navy,
+          font: { size: 18, weight: '900', family: 'Montserrat, "Arial Black", Arial, sans-serif' },
           padding: { bottom: 14 },
           align: 'start'
         },
@@ -330,12 +356,13 @@
           title: {
             display: true,
             text: 'Gallons Per Minute (GPM)',
-            color: '#1a2430',
-            font: { weight: '600', size: 13 }
+            color: BRAND.navy,
+            font: { weight: '700', size: 13, family: 'Montserrat, Arial, sans-serif' }
           },
-          grid: { color: 'rgba(30,60,80,.14)' },
+          grid: { color: 'rgba(8,54,107,.12)' },
           ticks: {
-            color: '#1a2430',
+            color: BRAND.navy,
+            font: { family: 'Montserrat, Arial, sans-serif' },
             stepSize: xStep,
             maxTicksLimit: Math.ceil(cal.gpmMax / xStep) + 2
           }
@@ -347,12 +374,13 @@
           title: {
             display: true,
             text: 'Total Dynamic Head (Feet)',
-            color: '#1a2430',
-            font: { weight: '600', size: 13 }
+            color: BRAND.navy,
+            font: { weight: '700', size: 13, family: 'Montserrat, Arial, sans-serif' }
           },
-          grid: { color: 'rgba(30,60,80,.14)' },
+          grid: { color: 'rgba(8,54,107,.12)' },
           ticks: {
-            color: '#1a2430',
+            color: BRAND.navy,
+            font: { family: 'Montserrat, Arial, sans-serif' },
             stepSize: yStep,
             maxTicksLimit: Math.ceil(cal.tdhMax / yStep) + 2
           }
@@ -371,6 +399,7 @@
   function applyChartOptions(tdh){
     const opts = chartOptions(tdh);
     chart.options.aspectRatio = opts.aspectRatio;
+    chart.options.backgroundColor = opts.backgroundColor;
     chart.options.layout = opts.layout;
     chart.options.plugins = opts.plugins;
     chart.options.scales = opts.scales;
@@ -391,7 +420,7 @@
         backgroundColor: mark.color,
         pointRadius: 9,
         pointHoverRadius: 9,
-        pointBorderColor: '#14283a',
+        pointBorderColor: BRAND.navy,
         pointBorderWidth: 3,
         showLine: false,
         order: -1
@@ -429,6 +458,7 @@
     const mark = markFromTdh(m, tdh);
     chart = new Chart(canvas, {
       type: 'line',
+      plugins: [whiteBgPlugin],
       data: { datasets: buildDatasets(m.id, tdh, mark) },
       options: chartOptions(tdh)
     });
@@ -468,7 +498,7 @@
     const tdh = getTdh();
     if(tdh == null){
       out.innerHTML = 'Enter a TDH value.';
-      exportCaption = { prefix: 'Enter a TDH value.', value: '', suffix: '', valueColor: '#1f9d4d' };
+      exportCaption = { prefix: 'Enter a TDH value.', value: '', suffix: '', valueColor: BRAND.good };
       return;
     }
     const m = curModel();
@@ -476,7 +506,7 @@
       out.innerHTML = '<b>' + m.label + '</b>: no curve data for this model.';
       exportCaption = {
         prefix: m.label + ': no curve data.',
-        value: '', suffix: '', valueColor: '#1f9d4d'
+        value: '', suffix: '', valueColor: BRAND.good
       };
       return;
     }
@@ -500,7 +530,7 @@
       prefix: m.label + ' at ' + tdh + ' ft TDH gives about ',
       value: gpm + ' GPM',
       suffix: '.',
-      valueColor: '#1f9d4d'
+      valueColor: BRAND.good
     };
   }
 
@@ -517,6 +547,7 @@
 
   function buildExportCanvas(){
     if(!chart) return null;
+    chart.options.backgroundColor = '#ffffff';
     chart.update('none');
     const src = chart.canvas;
     const W = src.width, H = src.height;
@@ -527,9 +558,12 @@
     out.height = H + bandH;
     const o = out.getContext('2d');
 
-    o.fillStyle = '#f3f8fc';
+    o.fillStyle = '#ffffff';
+    o.fillRect(0, 0, W, out.height);
+
+    o.fillStyle = BRAND.exportBg;
     o.fillRect(0, 0, W, bandH);
-    o.strokeStyle = '#dcebf6';
+    o.strokeStyle = BRAND.exportLine;
     o.lineWidth = Math.max(2, Math.round(W / 640));
     o.strokeRect(o.lineWidth / 2, o.lineWidth / 2, W - o.lineWidth, bandH - o.lineWidth);
 
@@ -540,20 +574,22 @@
     while(fontSize > 14 && o.measureText(full).width > W - pad * 2) fontSize -= 1;
 
     let x = pad, y = bandH / 2;
-    o.font = '600 ' + fontSize + 'px Arial, sans-serif';
-    o.fillStyle = '#16344a';
+    o.font = '600 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+    o.fillStyle = BRAND.navy;
     o.fillText(exportCaption.prefix, x, y);
     x += o.measureText(exportCaption.prefix).width;
     if(exportCaption.value){
-      o.font = '700 ' + Math.round(fontSize * 1.12) + 'px Arial, sans-serif';
+      o.font = '700 ' + Math.round(fontSize * 1.12) + 'px Montserrat, Arial, sans-serif';
       o.fillStyle = exportCaption.valueColor;
       o.fillText(exportCaption.value, x, y);
       x += o.measureText(exportCaption.value).width;
-      o.font = '600 ' + fontSize + 'px Arial, sans-serif';
-      o.fillStyle = '#16344a';
+      o.font = '600 ' + fontSize + 'px Montserrat, Arial, sans-serif';
+      o.fillStyle = BRAND.navy;
     }
     if(exportCaption.suffix) o.fillText(exportCaption.suffix, x, y);
 
+    o.fillStyle = '#ffffff';
+    o.fillRect(0, bandH, W, H);
     o.drawImage(src, 0, bandH);
     return out;
   }
